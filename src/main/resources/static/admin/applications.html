@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Applications</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    .status-badge {
+      font-size: 0.85rem;
+    }
+    .table-hover tbody tr:hover {
+      background-color: rgba(0, 123, 255, 0.05);
+    }
+    .sort-icon {
+      font-size: 0.7rem;
+      vertical-align: middle;
+    }
+    .review-form {
+      display: none;
+    }
+    .filter-btn {
+      position: relative;
+    }
+    .filter-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      font-size: 0.6rem;
+    }
+  </style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="/home.html">Scholarship Manager</a>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="/home.html">Home</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link active" href="/admin/applications.html">Applications</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/admin/common.html">Statistics</a>
+        </li>
+      </ul>
+      <div id="userInfo" class="d-flex align-items-center">
+        <span class="navbar-text me-3">Welcome, <span id="navUsername"></span></span>
+        <button onclick="logout()" class="btn btn-outline-light">Logout</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid py-4">
+  <div class="row mb-4">
+    <div class="col">
+      <h1 class="h2 fw-bold">Manage Applications</h1>
+      <p class="text-muted">
+        Review and manage student scholarship applications
+      </p>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div id="successAlert" class="alert alert-success alert-dismissible fade show d-none" role="alert">
+    <span id="successMessage"></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  <div id="errorAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+    <span id="errorMessage"></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+
+  <!-- Filters and stats -->
+  <div class="row mb-4">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Filter Applications</h5>
+          <div class="d-flex gap-2">
+            <button onclick="loadApplications()" class="btn btn-outline-secondary filter-btn">
+              All
+              <span id="totalCountBadge" class="badge bg-secondary filter-badge">0</span>
+            </button>
+            <button onclick="loadApplications('PENDING')" class="btn btn-outline-warning filter-btn">
+              Pending
+              <span id="pendingCountBadge" class="badge bg-white text-warning filter-badge">0</span>
+            </button>
+            <button onclick="loadApplications('APPROVED')" class="btn btn-outline-success filter-btn">
+              Approved
+              <span id="approvedCountBadge" class="badge bg-white text-success filter-badge">0</span>
+            </button>
+            <button onclick="loadApplications('REJECTED')" class="btn btn-outline-danger filter-btn">
+              Rejected
+              <span id="rejectedCountBadge" class="badge bg-white text-danger filter-badge">0</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Application Stats</h5>
+          <div class="progress" style="height: 25px;">
+            <div id="pendingProgress" class="progress-bar bg-warning" style="width: 0%">0</div>
+            <div id="approvedProgress" class="progress-bar bg-success" style="width: 0%">0</div>
+            <div id="rejectedProgress" class="progress-bar bg-danger" style="width: 0%">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Applications table -->
+  <div class="card">
+    <div class="card-body">
+      <div id="loadingSpinner" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading applications...</p>
+      </div>
+
+      <div id="noApplicationsAlert" class="alert alert-info d-none">
+        No applications match the current filters.
+      </div>
+
+      <div id="applicationsTable" class="table-responsive d-none">
+        <table class="table table-hover">
+          <thead class="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Student</th>
+            <th>Scholarship</th>
+            <th>Application Date</th>
+            <th>Status</th>
+            <th>Match Score</th>
+            <th>Actions</th>
+          </tr>
+          </thead>
+          <tbody id="applicationsTableBody">
+          <!-- Applications will be loaded here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div id="paginationContainer" class="d-flex justify-content-center mt-3 d-none">
+        <nav aria-label="Page navigation">
+          <ul class="pagination" id="pagination">
+            <!-- Pagination will be loaded here -->
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Current state
+  let currentState = {
+    page: 0,
+    size: 10,
+    sort: 'applicationDate',
+    direction: 'desc',
+    status: null
+  };
+
+  document.addEventListener('DOMContentLoaded', async function() {
+    await loadApplications();
+  });
+
+  async function loadApplications(status = null) {
+    try {
+      // Update current state
+      currentState.status = status || null;
+      currentState.page = 0; // Reset to first page when changing filters
+
+      // Show loading spinner
+      document.getElementById('loadingSpinner').classList.remove('d-none');
+      document.getElementById('applicationsTable').classList.add('d-none');
+      document.getElementById('noApplicationsAlert').classList.add('d-none');
+      document.getElementById('paginationContainer').classList.add('d-none');
+
+      // Build query string
+      const queryParams = new URLSearchParams();
+      queryParams.append('page', currentState.page);
+      queryParams.append('size', currentState.size);
+      queryParams.append('sort', currentState.sort);
+      queryParams.append('direction', currentState.direction);
+      if (currentState.status) {
+        queryParams.append('status', currentState.status);
+      }
+
+      const response = await fetch(`/api/admin/applications?${queryParams.toString()}`, {
+        credentials: 'include'
+      });
+
+      if (response.status === 403) {
+        window.location.href = '/auth/login.html';
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to load applications');
+      }
+
+      const data = await response.json();
+      console.log('Applications data:', data);
+      console.log(data.stats.totalCount);
+      // Update stats
+      document.getElementById('totalCountBadge').textContent = data.stats.totalCount || 0;
+      document.getElementById('pendingCountBadge').textContent = data.stats.pendingCount || 0;
+      document.getElementById('approvedCountBadge').textContent = data.stats.approvedCount || 0;
+      document.getElementById('rejectedCountBadge').textContent = data.stats.rejectedCount || 0;
+
+      // Update progress bars
+      const total = data.stats.totalCount > 0 ? data.stats.totalCount : 1;
+      document.getElementById('pendingProgress').style.width = `${(data.stats.pendingCount / total) * 100}%`;
+      document.getElementById('pendingProgress').textContent = data.stats.pendingCount;
+      document.getElementById('approvedProgress').style.width = `${(data.stats.approvedCount / total) * 100}%`;
+      document.getElementById('approvedProgress').textContent = data.stats.approvedCount;
+      document.getElementById('rejectedProgress').style.width = `${(data.stats.rejectedCount / total) * 100}%`;
+      document.getElementById('rejectedProgress').textContent = data.stats.rejectedCount;
+
+      // Display applications
+      displayApplications(data);
+    } catch (error) {
+      console.error('Error loading applications:', error);
+      showAlert('error', 'Failed to load applications. Please try again later.');
+      document.getElementById('loadingSpinner').classList.add('d-none');
+    }
+  }
+
+  function displayApplications(data) {
+    const applications = data.applications || [];
+    const tableBody = document.getElementById('applicationsTableBody');
+    const noApplicationsAlert = document.getElementById('noApplicationsAlert');
+    const applicationsTable = document.getElementById('applicationsTable');
+    const paginationContainer = document.getElementById('paginationContainer');
+
+    // Clear previous content
+    tableBody.innerHTML = '';
+
+    if (applications.length === 0) {
+      noApplicationsAlert.classList.remove('d-none');
+      applicationsTable.classList.add('d-none');
+      paginationContainer.classList.add('d-none');
+      document.getElementById('loadingSpinner').classList.add('d-none');
+      return;
+    }
+
+    noApplicationsAlert.classList.add('d-none');
+    applicationsTable.classList.remove('d-none');
+    paginationContainer.classList.remove('d-none');
+    document.getElementById('loadingSpinner').classList.add('d-none');
+
+    // Populate table
+    applications.forEach(app => {
+      const row = document.createElement('tr');
+
+      // Format application date
+      const appDate = app.applicationDate
+              ? new Date(app.applicationDate).toLocaleString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+              : 'N/A';
+
+      // Status badge
+      let statusBadge;
+      switch(app.status) {
+        case 'PENDING':
+          statusBadge = '<span class="badge bg-warning text-dark status-badge">Pending</span>';
+          break;
+        case 'APPROVED':
+          statusBadge = '<span class="badge bg-success status-badge">Approved</span>';
+          break;
+        case 'REJECTED':
+          statusBadge = '<span class="badge bg-danger status-badge">Rejected</span>';
+          break;
+        default:
+          statusBadge = '<span class="badge bg-secondary status-badge">Unknown</span>';
+      }
+
+      // Match score
+      const matchScore = app.matchScore
+              ? `${app.matchScore}%`
+              : '<span class="text-muted">N/A</span>';
+
+      // Student info
+      const studentInfo = app
+              ? `<div>${app.studentName || 'N/A'}</div>
+                   <small class="text-muted">${app.studentEnrollmentNumber || ''}</small>`
+              : 'N/A';
+
+      // Scholarship info
+      const scholarshipInfo = app
+              ? `<div>${app.scholarshipName || 'N/A'}</div>
+                   <small class="text-muted">${app.scholarshipAmount ? app.scholarshipAmount + ' RON' : ''}</small>`
+              : 'N/A';
+
+
+      // Actions
+      let actionsHtml;
+      if (app.status === 'PENDING') {
+        actionsHtml = `
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-success" onclick="showReviewForm('approve-form-${app.id}')">
+                            <i class="bi bi-check-circle"></i> Approve
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="showReviewForm('reject-form-${app.id}')">
+                            <i class="bi bi-x-circle"></i> Reject
+                        </button>
+                    </div>
+                    <div id="approve-form-${app.id}" class="review-form mt-2">
+                        <div class="mb-2">
+                            <textarea id="approve-notes-${app.id}" class="form-control form-control-sm"
+                                      placeholder="Optional approval notes" rows="2"></textarea>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-success" onclick="approveApplication(${app.id})">
+                                Confirm Approval
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="hideReviewForm('approve-form-${app.id}')">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    <div id="reject-form-${app.id}" class="review-form mt-2">
+                        <div class="mb-2">
+                            <textarea id="reject-notes-${app.id}" class="form-control form-control-sm"
+                                      placeholder="Rejection reason" rows="2" required></textarea>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-danger" onclick="rejectApplication(${app.id})">
+                                Confirm Rejection
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="hideReviewForm('reject-form-${app.id}')">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                `;
+      } else {
+        actionsHtml = `
+                    <div class="small">
+                        <div class="text-muted">
+                            Processed at: ${app.reviewedAt ? new Date(app.reviewedAt).toLocaleString() : 'N/A'}
+                        </div>
+                        ${app.notes ? `<div class="mt-1"><strong>Notes:</strong> ${app.notes}</div>` : ''}
+                    </div>
+                `;
+      }
+
+      row.innerHTML = `
+                <td>${app.id}</td>
+                <td>${studentInfo}</td>
+                <td>${scholarshipInfo}</td>
+                <td>${appDate}</td>
+                <td>${statusBadge}</td>
+                <td>${matchScore}</td>
+                <td>${actionsHtml}</td>
+            `;
+
+      tableBody.appendChild(row);
+    });
+
+    // Setup pagination
+    setupPagination(data);
+  }
+
+  function setupPagination(data) {
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    const totalPages = data.totalPages || 1;
+    const currentPage = data.currentPage || 0;
+
+    // Previous buttons
+    pagination.innerHTML += `
+            <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(0)" aria-label="First">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+            <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage - 1})" aria-label="Previous">
+                    <span aria-hidden="true">Previous</span>
+                </a>
+            </li>
+        `;
+
+    // Page numbers
+    const startPage = Math.max(0, currentPage - 2);
+    const endPage = Math.min(totalPages - 1, currentPage + 2);
+
+    for (let i = startPage; i <= endPage; i++) {
+      pagination.innerHTML += `
+                <li class="page-item ${i === currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="changePage(${i})">${i + 1}</a>
+                </li>
+            `;
+    }
+
+    // Next buttons
+    pagination.innerHTML += `
+            <li class="page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage + 1})" aria-label="Next">
+                    <span aria-hidden="true">Next</span>
+                </a>
+            </li>
+            <li class="page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${totalPages - 1})" aria-label="Last">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+        `;
+  }
+
+  function changePage(page) {
+    currentState.page = page;
+    loadApplications(currentState.status);
+  }
+
+  function showReviewForm(formId) {
+    document.getElementById(formId).style.display = 'block';
+  }
+
+  function hideReviewForm(formId) {
+    document.getElementById(formId).style.display = 'none';
+  }
+
+  async function approveApplication(applicationId) {
+    const notes = document.getElementById(`approve-notes-${applicationId}`).value;
+
+    try {
+      const response = await fetch(`/api/admin/applications/${applicationId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: notes ? JSON.stringify({ notes }) : '{}'
+      });
+
+      if (response.status === 403) {
+        window.location.href = '/auth/login.html';
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to approve application');
+      }
+
+      const data = await response.json();
+      showAlert('success', data.success || 'Application approved successfully');
+      await loadApplications(currentState.status);
+    } catch (error) {
+      console.error('Error approving application:', error);
+      showAlert('error', 'Failed to approve application');
+    }
+  }
+
+  async function rejectApplication(applicationId) {
+    const notes = document.getElementById(`reject-notes-${applicationId}`).value;
+
+    if (!notes) {
+      showAlert('error', 'Please provide a rejection reason');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/applications/${applicationId}/reject`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes })
+      });
+
+      if (response.status === 403) {
+        window.location.href = '/auth/login.html';
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to reject application');
+      }
+
+      const data = await response.json();
+      showAlert('success', data.success || 'Application rejected');
+      await loadApplications(currentState.status);
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      showAlert('error', 'Failed to reject application');
+    }
+  }
+
+  function showAlert(type, message) {
+    const alertMap = {
+      'success': document.getElementById('successAlert'),
+      'error': document.getElementById('errorAlert')
+    };
+
+    // Hide all alerts first
+    Object.values(alertMap).forEach(alert => {
+      alert.classList.add('d-none');
+      alert.querySelector('span').textContent = '';
+    });
+
+    if (alertMap[type]) {
+      alertMap[type].querySelector('span').textContent = message;
+      alertMap[type].classList.remove('d-none');
+
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        alertMap[type].classList.add('d-none');
+      }, 5000);
+    }
+  }
+
+  async function logout() {
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        window.location.href = '/auth/login.html';
+      } else {
+        console.error('Logout failed');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compatible Student Groups</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            padding-bottom: 20px;
+        }
+
+        .main-container {
+            max-width: 1000px;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .stats {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .stats span {
+            margin: 0 20px;
+            font-weight: bold;
+        }
+
+        .group {
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .group-header {
+            background: #f8f9fa;
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .group-content {
+            padding: 15px;
+        }
+
+        .student {
+            background: #f8f9fa;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+            border-left: 3px solid #007bff;
+        }
+
+        .scholarship {
+            background: #fff3cd;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 3px;
+            border-left: 3px solid #ffc107;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="/home.html">Scholarship Manager</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/home.html">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/applications.html">Applications</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/admin/common.html">Statistics</a>
+                </li>
+            </ul>
+            <div id="userInfo" class="d-flex align-items-center">
+                <span class="navbar-text me-3">Welcome, <span id="navUsername"></span></span>
+                <button onclick="logout()" class="btn btn-outline-light">Logout</button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="container main-container">
+    <h1 class="text-center mb-4">Compatible Student Groups</h1>
+
+    <div class="d-flex justify-content-center mb-4">
+        <button class="btn btn-primary mx-2" onclick="loadData()" id="loadBtn">Find Groups</button>
+        <button class="btn btn-success mx-2" onclick="exportData()" id="exportBtn">Export CSV</button>
+    </div>
+
+    <div id="error" class="alert alert-danger" style="display: none;"></div>
+
+    <div id="stats" class="stats" style="display: none;">
+        <span>Groups: <span id="groupCount">0</span></span>
+        <span>Students: <span id="studentCount">0</span></span>
+        <span>Scholarships: <span id="scholarshipCount">0</span></span>
+        <span id="extraStats"></span>
+    </div>
+
+    <div id="content">
+        <div class="text-center py-5 text-muted">
+            <h3>No groups found</h3>
+            <p>Click "Find Groups" to load data</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currentData = [];
+    let currentResponse = {};
+    let isLoading = false;
+
+    function showError(message) {
+        const errorDiv = document.getElementById('error');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+
+    function hideError() {
+        document.getElementById('error').style.display = 'none';
+    }
+
+    function showLoading() {
+        isLoading = true;
+        document.getElementById('loadBtn').disabled = true;
+        document.getElementById('exportBtn').disabled = true;
+        document.getElementById('content').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner"></div>
+                <p class="mt-3">Loading data...</p>
+            </div>
+        `;
+    }
+
+    function hideLoading() {
+        isLoading = false;
+        document.getElementById('loadBtn').disabled = false;
+        document.getElementById('exportBtn').disabled = false;
+    }
+
+    async function loadData() {
+        hideError();
+        showLoading();
+
+        try {
+            const url = `/api/admin/compatible`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Check for error in response
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            currentResponse = data;
+            currentData = data.compatibleGroups || [];
+
+            displayData();
+
+        } catch (error) {
+            console.error('Error loading data:', error);
+
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                showError('Could not connect to API. Check your internet connection.');
+            } else {
+                showError(`Error: ${error.message}`);
+            }
+
+            currentData = [];
+            currentResponse = {};
+            displayData();
+        } finally {
+            hideLoading();
+        }
+    }
+
+    function displayData() {
+        if (currentData.length === 0) {
+            document.getElementById('content').innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <h3>No groups found</h3>
+                    <p>There are no compatible groups matching the selected criteria</p>
+                </div>
+            `;
+            document.getElementById('stats').style.display = 'none';
+            return;
+        }
+
+        // Statistics
+        const totalStudents = currentData.reduce((sum, group) => sum + (group.studentCount || group.students?.length || 0), 0);
+        const totalScholarships = currentData.reduce((sum, group) => sum + (group.commonScholarships?.length || 0), 0);
+
+        document.getElementById('groupCount').textContent = currentData.length;
+        document.getElementById('studentCount').textContent = totalStudents;
+        document.getElementById('scholarshipCount').textContent = totalScholarships;
+
+        // Extra statistics from API response
+        let extraStatsText = '';
+        if (currentResponse.minMatchScore !== undefined) {
+            extraStatsText += `Min Score: ${currentResponse.minMatchScore}`;
+        }
+        if (currentResponse.minCommonScholarships !== undefined) {
+            extraStatsText += ` | Min Common Scholarships: ${currentResponse.minCommonScholarships}`;
+        }
+        document.getElementById('extraStats').textContent = extraStatsText;
+
+        document.getElementById('stats').style.display = 'block';
+
+        // Groups
+        let html = '';
+        currentData.forEach(group => {
+            const students = group.students || [];
+            const scholarships = group.commonScholarships || [];
+
+            html += `
+                <div class="group">
+                    <div class="group-header">
+                        Group ${group.groupId || group.id || 'N/A'} - ${group.studentCount || students.length} students
+                        ${group.matchScore ? `(Score: ${group.matchScore})` : ''}
+                    </div>
+                    <div class="group-content">
+                        <div class="students mb-3">
+                            <strong>Students:</strong>
+                            ${students.map(student => `
+                                <div class="student">
+                                    <strong>${student.firstName} ${student.lastName}</strong><br>
+                                    ${student.gpa ? `GPA: ${student.gpa}` : ''}
+                                    ${student.yearOfStudy ? ` | Year: ${student.yearOfStudy || student.year_of_study}` : ''}
+                                    ${student.departmentId ? ` | Dept: ${student.departmentId.name}` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="scholarships">
+                            <strong>Common Scholarships:</strong>
+                            ${scholarships.map(scholarship => `
+                                <div class="scholarship">
+                                    <strong>${scholarship.name}</strong><br>
+                                    ${scholarship.amount ? `Amount: ${scholarship.amount} RON` : ''}
+                                    ${scholarship.minGpa || scholarship.min_gpa ? ` | Min GPA: ${scholarship.minGpa || scholarship.min_gpa}` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        document.getElementById('content').innerHTML = html;
+    }
+
+    function exportData() {
+        if (currentData.length === 0) {
+            alert('No data available for export');
+            return;
+        }
+
+        let csv = 'Group,Student,GPA,Year,Department,Scholarships\n';
+
+        currentData.forEach(group => {
+            const scholarships = (group.commonScholarships || []).map(s => s.name).join('; ');
+            const students = group.students || [];
+
+            students.forEach(student => {
+                csv += `${group.groupId},"${student.firstName} ${student.lastName}",${student.gpa},${student.yearOfStudy},${student.departmentId},"${scholarships}"\n`;
+            });
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student-groups.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+    async function logout() {
+        try {
+            const response = await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                window.location.href = '/auth/login.html';
+            } else {
+                console.error('Logout failed');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    }
+</script>
+</body>
+</html>

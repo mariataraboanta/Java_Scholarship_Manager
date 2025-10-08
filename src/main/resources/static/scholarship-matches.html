@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Scholarship Matches</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+
+        .match-card {
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .match-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .match-score {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+
+        .progress {
+            height: 10px;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="/home.html">Scholarship Manager</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/home.html">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/scholarship-matches.html">My Matches</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/my-applications.html">My Applications</a>
+                </li>
+            </ul>
+            <div id="userInfo" class="d-flex align-items-center">
+                <span class="navbar-text me-3">Welcome, <span id="navUsername"></span></span>
+                <button onclick="logout()" class="btn btn-outline-light">Logout</button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="container my-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>My Scholarship Matches</h1>
+        <a href="/my-applications.html" class="btn btn-outline-primary">View My Applications</a>
+    </div>
+
+    <div class="alert alert-info" id="welcomeAlert">
+        Based on your profile, we've found these scholarships that match your qualifications.
+    </div>
+
+    <div id="loadingSpinner" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading your scholarship matches...</p>
+    </div>
+
+    <div id="matchesContainer" class="row">
+    </div>
+
+    <div id="noMatchesMessage" class="text-center d-none">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">No matches found</h5>
+                <p class="card-text">We couldn't find any scholarships that match your current profile.</p>
+                <p class="card-text">Please check back later or update your profile information.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Application Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Success!</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="successMessage">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', async function () {
+        // Încarcă direct scholarship matches - dacă nu e autentificat, va primi 401
+        await loadScholarshipMatches();
+    });
+
+    async function loadScholarshipMatches() {
+        try {
+            const response = await fetch('/api/scholarship-matches', {
+                credentials: 'include'
+            });
+
+            if (response.status === 401) {
+                // Nu e autentificat, redirectează la login
+                window.location.href = '/auth/login.html';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Failed to load matches');
+            }
+
+            const data = await response.json();
+
+            // Debug: Vezi ce primești în response
+            console.log('Response data:', data);
+            console.log('Student:', data.student);
+            console.log('Scholarship matches:', data.scholarshipMatches);
+
+            // Extrage numele studentului pentru navbar
+            if (data.student) {
+                const displayName = data.student.firstName && data.student.lastName
+                    ? `${data.student.firstName} ${data.student.lastName}`
+                    : 'Student';
+                document.getElementById('navUsername').textContent = displayName;
+            }
+
+            displayMatches(data);
+        } catch (error) {
+            console.error('Error loading matches:', error);
+            document.getElementById('loadingSpinner').innerHTML = `
+                <div class="alert alert-danger">
+                    Failed to load scholarship matches. Please try again later.
+                </div>
+            `;
+        }
+    }
+
+    function displayMatches(data) {
+        const container = document.getElementById('matchesContainer');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const noMatchesMessage = document.getElementById('noMatchesMessage');
+
+        loadingSpinner.classList.add('d-none');
+
+        // Verifică dacă scholarshipMatches există și este un array
+        const matches = data.scholarshipMatches || [];
+        const student = data.student || {};
+
+        if (matches.length === 0) {
+            noMatchesMessage.classList.remove('d-none');
+            return;
+        }
+
+        // Update navbar with student name
+        const displayName = student.firstName && student.lastName
+            ? `${student.firstName} ${student.lastName}`
+            : 'Student';
+        document.getElementById('navUsername').textContent = displayName;
+
+        matches.forEach(match => {
+            // Verifică dacă match și scholarship există
+            if (!match || !match.scholarship) {
+                console.warn('Invalid match object:', match);
+                return;
+            }
+
+            const scholarship = match.scholarship;
+            const col = document.createElement('div');
+            col.className = 'col-md-6 col-lg-4';
+
+            col.innerHTML = `
+                <div class="card match-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">${scholarship.name || 'N/A'}</h5>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Amount:</span>
+                            <span class="fw-bold">${scholarship.amount || 0}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Deadline:</span>
+                            <span>${scholarship.deadline ? new Date(scholarship.deadline).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-muted">Match Score:</span>
+                            <span class="match-score">${match.matchScore ? match.matchScore : 0}%</span>
+                        </div>
+
+                        <button onclick="applyForScholarship(${scholarship.id || 0})"
+                                class="btn btn-primary w-100">
+                            Apply Now
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(col);
+        });
+    }
+
+    async function applyForScholarship(scholarshipId) {
+        try {
+            const response = await fetch(`/api/scholarship-matches/apply?scholarshipId=${scholarshipId}`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Show success message
+                document.getElementById('successMessage').textContent = data.success;
+                const modal = new bootstrap.Modal(document.getElementById('successModal'));
+                modal.show();
+
+                // Reload matches after a short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                alert(data.error || data.info || 'Failed to apply for scholarship');
+            }
+        } catch (error) {
+            console.error('Error applying for scholarship:', error);
+            alert('An error occurred while applying for the scholarship');
+        }
+    }
+
+    async function logout() {
+        try {
+            const response = await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                window.location.href = '/auth/login.html';
+            } else {
+                console.error('Logout failed');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    }
+</script>
+</body>
+</html>
